@@ -1,0 +1,12 @@
+module use /appl/local/csc/modulefiles 
+ml pytorch/2.2
+
+## Unified memory off
+export CRAY_ACC_USE_UNIFIED_MEM=0
+export HSA_XNACK=0
+
+## Analysator
+export PYTHONPATH=$PYTHONPATH:/scratch/project_462000559/kostis/libs/analysator
+
+alias srme='srun -t 00:05:00 -J asterix_vqvae_test -p dev-g -A project_462000559 -N 1 -n 1 -G 1'
+

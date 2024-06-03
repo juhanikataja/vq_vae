@@ -1,5 +1,5 @@
-import sys
-sys.path.append('/scratch/project_462000599/kostis/libs/analysator')
+#import sys
+#sys.path.append('/scratch/project_462000599/kostis/libs/analysator')
 
 import torch
 import torchvision
@@ -9,7 +9,10 @@ from torch.nn import functional as F
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import pytools as pt
+torch.cuda.empty_cache()
 
+import os
+os.environ["PYTORCH_HIP_ALLOC_CONF"] = "garbage_collection_threshold:0.9,max_split_size_mb:512"
 
 #Reads in a VDF from cid CellID in a 3D  32 bit numpy array
 def extract_vdf(file, cid, box=-1):
@@ -406,9 +409,10 @@ input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
 #input_array=torch.from_numpy(res).cuda()
 #print(np.shape(res))
 
-print("Loaded vdfs 1..5")
+print("loaded vdfs")
 
-# # Initialize dataset
+
+# Initialize dataset
 batch_size = 1
 workers = 1
 
@@ -422,45 +426,68 @@ train_loader = DataLoader(
     num_workers=workers,
 )
 
-print("Initialized DataLoader")
+print("sent training data to device")
 
-# # Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
+
+# Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning
 beta = 0.25
 
-# # Initialize optimizer
+# Initialize optimizer
 train_params = [params for params in model.parameters()]
 lr = 3e-4
 optimizer = optim.Adam(train_params, lr=lr)
 criterion = nn.MSELoss()
 
-
-print("Train model")
-# # Train model
+# Train model
 epochs = 30
 eval_every = 1
 best_train_loss = float("inf")
 model.train()
 
-print("Trained model")
+print("starting training")
 
-# Take vdfs and encode them with the model
-# optional: visualize latent representations
-# required: store latent representations
+#Actually train
+for epoch in (range(epochs)):
+    total_train_loss = 0
+    total_recon_error = 0
+    n_train = 0
+    for (batch_idx, train_tensors) in enumerate(train_loader):
+        optimizer.zero_grad()
+        imgs = train_tensors[0].unsqueeze(0).to(device)
+        out = model(imgs)
+        recon_error = criterion(out["x_recon"], imgs) #/ train_data_variance
+        total_recon_error += recon_error.item()
+        loss = recon_error + beta * out["commitment_loss"]
+        if not use_ema:
+            loss += out["dictionary_loss"]
 
-print(input_tensor.shape)
-encoded = model.encoder.forward(input_tensor[0,0,0,:,:,:])
-print(encoded)
-print("Encoded vdfs 1...5")
+        total_train_loss += loss.item()
+        loss.backward()
+        optimizer.step()
+        n_train += 1
 
-# Take latent representations and decode them with Decoder
-# required (at some point): load latent representations from file
-# required: compare decoded vdfs
+        if ((batch_idx + 1) % eval_every) == 0:
+            print(f"epoch: {epoch}\nbatch_idx: {batch_idx + 1}", flush=True)
+            total_train_loss /= n_train
+            if total_train_loss < best_train_loss:
+                best_train_loss = total_train_loss
 
-print("Decoded vdfs 1...5\nErrors:")
+            print(f"total_train_loss: {total_train_loss}")
+            writer.add_scalar("tr loss: ", total_train_loss, epoch)
 
-# TODO: test with different samples from training samples
+            print(f"best_train_loss: {best_train_loss}")
+            print(f"recon_error: {total_recon_error / n_train}\n")
+
+            total_train_loss = 0
+            total_recon_error = 0
+            n_train = 0
 
 
-print("Saving model")
-torch.save(model.state_dict(), "model.tch")
-print("model saved")
+
+#Encode
+encoded_vdfs = []
+for i in range(input_tensor.shape[0]):
+    encoded_vdf = model.encoder(input_tensor[i].unsqueeze(0))
+    encoded_vdfs.append(encoded_vdf.detach().cpu().numpy())
+
+encoded_vdfs = np.array(encoded_vdfs)
