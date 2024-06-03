@@ -49,8 +49,6 @@ export LIBOMPTARGET_KERNEL_TRACE=0
 #export PYTORCH_HIP_ALLOC_CONF=expandable_segments:True
 #export PYTORCH_CUDA_ALLOC_CONF="max_split_size_mb=10"
 ###### enable CSC provided modules #########
-ml use /appl/local/csc/modulefiles
-
 module use /appl/local/csc/modulefiles 
 ml pytorch/2.2
 

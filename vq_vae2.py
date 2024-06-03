@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from torch.nn import functional as F
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
+from tqdm import tqdm
 import pytools as pt
 torch.cuda.empty_cache()
 
@@ -376,8 +377,14 @@ class VQVAE(nn.Module):
             "x_recon": x_recon,
         }
 
+# TODO: reading vlsv file
+import sys
+cids=[1]
+filename="restart.0000100.2024-05-31_12-50-15.vlsv"
+input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
+input_array=input_array.squeeze();
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = 'cuda'#torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
 use_tb = True # Use Tensorboard (optional)
@@ -396,21 +403,7 @@ model_args = {
     "decay": 0.99,
     "epsilon": 1e-5,
 }
-
 model = VQVAE(**model_args).to(device)
-
-# TODO: reading vlsv file
-import sys
-cids=[1,2,3,4,5]
-# cids=np.arange(1,2400)
-#filename=sys.argv[1]
-filename="restart.0000100.2024-05-31_12-50-15.vlsv"
-input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
-#input_array=torch.from_numpy(res).cuda()
-#print(np.shape(res))
-
-print("loaded vdfs")
-
 
 # Initialize dataset
 batch_size = 1
@@ -426,10 +419,7 @@ train_loader = DataLoader(
     num_workers=workers,
 )
 
-print("sent training data to device")
-
-
-# Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning
+# Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
 beta = 0.25
 
 # Initialize optimizer
@@ -439,15 +429,15 @@ optimizer = optim.Adam(train_params, lr=lr)
 criterion = nn.MSELoss()
 
 # Train model
-epochs = 30
+epochs = 3
 eval_every = 1
 best_train_loss = float("inf")
 model.train()
 
-print("starting training")
 
-#Actually train
-for epoch in (range(epochs)):
+
+# Training
+for epoch in tqdm(range(epochs)):
     total_train_loss = 0
     total_recon_error = 0
     n_train = 0
@@ -472,8 +462,6 @@ for epoch in (range(epochs)):
             if total_train_loss < best_train_loss:
                 best_train_loss = total_train_loss
 
-            print(f"total_train_loss: {total_train_loss}")
-            writer.add_scalar("tr loss: ", total_train_loss, epoch)
 
             print(f"best_train_loss: {best_train_loss}")
             print(f"recon_error: {total_recon_error / n_train}\n")
@@ -482,12 +470,3 @@ for epoch in (range(epochs)):
             total_recon_error = 0
             n_train = 0
 
-
-
-#Encode
-encoded_vdfs = []
-for i in range(input_tensor.shape[0]):
-    encoded_vdf = model.encoder(input_tensor[i].unsqueeze(0))
-    encoded_vdfs.append(encoded_vdf.detach().cpu().numpy())
-
-encoded_vdfs = np.array(encoded_vdfs)

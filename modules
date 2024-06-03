@@ -1,5 +1,7 @@
 module use /appl/local/csc/modulefiles 
 ml pytorch/2.2
+#ml LUMI/23.09
+#module load PyTorch/2.2.0-rocm-5.6.1-python-3.10-singularity-20240315
 
 ## Unified memory off
 export CRAY_ACC_USE_UNIFIED_MEM=0
