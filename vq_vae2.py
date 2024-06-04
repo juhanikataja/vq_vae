@@ -13,7 +13,7 @@ from tqdm import tqdm
 import pytools as pt
 torch.cuda.empty_cache()
 
-torch.multiprocessing.set_start_method('spawn')
+#torch.multiprocessing.set_start_method('spawn')
 
 #import os
 #os.environ["PYTORCH_HIP_ALLOC_CONF"] = "garbage_collection_threshold:0.9,max_split_size_mb:512"
@@ -411,7 +411,7 @@ model = VQVAE(**model_args).to(device)
 
 # Initialize dataset
 batch_size = 1
-workers = 1
+workers = 0
 
 input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
 input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)  # Add batch and channel dimensions, move to device
@@ -421,7 +421,7 @@ train_loader = DataLoader(
     batch_size=batch_size,
     shuffle=True,
     num_workers=workers,
-    pin_memory=True,
+    #pin_memory=True,
 )
 
 # Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
