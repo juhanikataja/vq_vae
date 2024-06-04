@@ -411,7 +411,7 @@ model = VQVAE(**model_args).to(device)
 
 # Initialize dataset
 batch_size = 1
-workers = 0
+workers = 1
 
 input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
 input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)  # Add batch and channel dimensions, move to device
@@ -421,6 +421,7 @@ train_loader = DataLoader(
     batch_size=batch_size,
     shuffle=True,
     num_workers=workers,
+    pin_memory=True,
 )
 
 # Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
@@ -469,7 +470,7 @@ for epoch in tqdm(range(epochs)):
 
             print(f"best_train_loss: {best_train_loss}")
             print(f"recon_error: {total_recon_error / n_train}\n")
-
+#
             total_train_loss = 0
             total_recon_error = 0
             n_train = 0
