@@ -1,5 +1,6 @@
 #module use /appl/local/csc/modulefiles 
 #ml pytorch/2.2
+export EBU_USER_PREFIX=/project/project_462000559/EasyBuild
 ml LUMI/23.09
 module load PyTorch/2.2.0-rocm-5.6.1-python-3.10-asterix-singularity-20240315
 
