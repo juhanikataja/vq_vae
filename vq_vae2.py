@@ -1,6 +1,7 @@
 #import sys
 #sys.path.append('/scratch/project_462000599/kostis/libs/analysator')
 
+#import multiprocessing
 import torch
 import torchvision
 from torch import nn, optim
@@ -12,8 +13,10 @@ from tqdm import tqdm
 import pytools as pt
 torch.cuda.empty_cache()
 
-import os
-os.environ["PYTORCH_HIP_ALLOC_CONF"] = "garbage_collection_threshold:0.9,max_split_size_mb:512"
+torch.multiprocessing.set_start_method('spawn')
+
+#import os
+#os.environ["PYTORCH_HIP_ALLOC_CONF"] = "garbage_collection_threshold:0.9,max_split_size_mb:512"
 
 #Reads in a VDF from cid CellID in a 3D  32 bit numpy array
 def extract_vdf(file, cid, box=-1):
@@ -385,6 +388,7 @@ input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
 input_array=input_array.squeeze();
 
 device = 'cuda'#torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = 'cpu'
 print('Using device:', device)
 
 use_tb = True # Use Tensorboard (optional)
@@ -407,7 +411,7 @@ model = VQVAE(**model_args).to(device)
 
 # Initialize dataset
 batch_size = 1
-workers = 1
+workers = 0
 
 input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
 input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)  # Add batch and channel dimensions, move to device

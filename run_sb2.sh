@@ -33,7 +33,7 @@
 ## the MPI tasks
 ##########################################
 #SBATCH --cpus-per-task=56
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+#export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 #echo "running OpenMP on $SLURM_CPUS_PER_TASK"
 #export KMP_AFFINITY=compact
 #export KMP_DETERMINISTIC_REDUCTION=yes
@@ -41,20 +41,19 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 #export CRAY_ACC_NO_ASYNC=1
 
 ## These control USM behaviour
-export CRAY_ACC_USE_UNIFIED_MEM=0
-export HSA_XNACK=0
-export CRAY_ACC_DEBUG=0
-export LIBOMPTARGET_KERNEL_TRACE=0
+#export CRAY_ACC_USE_UNIFIED_MEM=0
+#export HSA_XNACK=0
+#export CRAY_ACC_DEBUG=0
+#export LIBOMPTARGET_KERNEL_TRACE=0
 
 #export PYTORCH_HIP_ALLOC_CONF=expandable_segments:True
 #export PYTORCH_CUDA_ALLOC_CONF="max_split_size_mb=10"
 ###### enable CSC provided modules #########
+
 module use /appl/local/csc/modulefiles 
 ml pytorch/2.2
 
-## Unified memory off
-export CRAY_ACC_USE_UNIFIED_MEM=0
-export HSA_XNACK=0
+export CXI_FORK_SAFE=1
 
 ## Analysator
 export PYTHONPATH=$PYTHONPATH:/scratch/project_462000559/kostis/libs/analysator
