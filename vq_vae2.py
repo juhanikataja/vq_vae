@@ -13,10 +13,6 @@ from tqdm import tqdm
 import pytools as pt
 torch.cuda.empty_cache()
 
-#torch.multiprocessing.set_start_method('spawn')
-
-#import os
-#os.environ["PYTORCH_HIP_ALLOC_CONF"] = "garbage_collection_threshold:0.9,max_split_size_mb:512"
 
 #Reads in a VDF from cid CellID in a 3D  32 bit numpy array
 def extract_vdf(file, cid, box=-1):
@@ -382,7 +378,7 @@ class VQVAE(nn.Module):
 
 # TODO: reading vlsv file
 import sys
-cids=[1]
+cids=[1,2,3,4,5]
 filename="restart.0000100.2024-05-31_12-50-15.vlsv"
 input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
 input_array=input_array.squeeze();
@@ -421,7 +417,7 @@ train_loader = DataLoader(
     batch_size=batch_size,
     shuffle=True,
     num_workers=workers,
-   pin_memory=True,
+    pin_memory=True,
 )
 
 # Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
@@ -438,8 +434,6 @@ epochs = 3
 eval_every = 1
 best_train_loss = float("inf")
 model.train()
-
-
 
 # Training
 for epoch in tqdm(range(epochs)):
@@ -467,10 +461,8 @@ for epoch in tqdm(range(epochs)):
             if total_train_loss < best_train_loss:
                 best_train_loss = total_train_loss
 
-
             print(f"best_train_loss: {best_train_loss}")
             print(f"recon_error: {total_recon_error / n_train}\n")
-#
             total_train_loss = 0
             total_recon_error = 0
             n_train = 0

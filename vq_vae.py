@@ -398,8 +398,8 @@ model = VQVAE(**model_args).to(device)
 
 # TODO: reading vlsv file
 import sys
-cids=[1,2,3,4,5]
-# cids=np.arange(1,2400)
+# cids=[1,2,3,4,5]
+cids=np.arange(1,2400)
 #filename=sys.argv[1]
 filename="restart.0000100.2024-05-31_12-50-15.vlsv"
 input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
