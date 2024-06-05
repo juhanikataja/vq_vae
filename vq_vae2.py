@@ -1,7 +1,5 @@
 #import sys
 #sys.path.append('/scratch/project_462000599/kostis/libs/analysator')
-
-#import multiprocessing
 import torch
 import torchvision
 from torch import nn, optim
@@ -61,7 +59,7 @@ def extract_vdfs(file , cids,box):
     vdfs=[]
     for cid in cids:
         vdfs.append(extract_vdf(file, cid,box))
-    return np.asarray(vdfs);
+    return np.stack(vdfs);
 
 class ResidualStack(nn.Module):
     def __init__(self, num_hiddens, num_residual_layers, num_residual_hiddens):
@@ -378,10 +376,12 @@ class VQVAE(nn.Module):
 
 # TODO: reading vlsv file
 import sys
-cids=[1,2,3,4,5]
-filename="restart.0000100.2024-05-31_12-50-15.vlsv"
+cids=[1,2]
+filename=sys.argv[1]
 input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
 input_array=input_array.squeeze();
+print(input_array.shape)
+
 
 device = 'cuda'#torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #device = 'cpu'
@@ -392,7 +392,7 @@ use_tb = True # Use Tensorboard (optional)
 # Initialize model
 use_ema = True # Use exponential moving average
 model_args = {
-    "in_channels": 1,
+    "in_channels":len(cids),
     "num_hiddens": 128,
     "num_downsampling_layers": 2,
     "num_residual_layers": 2,
@@ -410,7 +410,8 @@ batch_size = 1
 workers = 0
 
 input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
-input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0).unsqueeze(0)#.to(device)  # Add batch and channel dimensions, move to device
+input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0)#.unsqueeze(0)#.to(device)  # Add batch and channel dimensions, move to device
+print(input_tensor.shape)
 train_dataset = input_tensor
 train_loader = DataLoader(
     dataset=train_dataset,
@@ -466,4 +467,9 @@ for epoch in tqdm(range(epochs)):
             total_train_loss = 0
             total_recon_error = 0
             n_train = 0
+
+
+
+# with torch.no_grad():
+#     encoded = model.encoder(input_tensor)
 
