@@ -389,12 +389,14 @@ class VQVAE(nn.Module):
 
 # TODO: reading vlsv file
 import sys
-cids=[1,2,3,4,5]
-filename="restart.0000100.2024-05-31_12-50-15.vlsv"
+#cids=[1,2,3,4,5]
+cids=range(0,20)
+#filename="restart.0000100.2024-05-31_12-50-15.vlsv"
+filename=sys.argv[1]
 input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
 input_array=input_array.squeeze();
 
-device = 'cuda'#torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = 'cuda' #torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #device = 'cpu'
 print('Using device:', device)
 
