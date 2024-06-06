@@ -1,18 +1,23 @@
 #import sys
 #sys.path.append('/scratch/project_462000599/kostis/libs/analysator')
 
+import sys
 import os
+from datetime import datetime
+import psutil
+#
 import torch
 import torchvision
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 
 # Distributed
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
+#from env_utils import print_slurm_env
 
 
 import numpy as np
@@ -21,10 +26,8 @@ import pytools as pt
 torch.cuda.empty_cache()
 
 # init distributed
-dist.init_process_group(backend='nccl')
 
-local_rank = int(os.environ['LOCAL_RANK'])
-torch.cuda.set_device(local_rank)
+  #torch.cuda.set_device(local_rank)
 
 #Reads in a VDF from cid CellID in a 3D  32 bit numpy array
 def extract_vdf(file, cid, box=-1):
@@ -388,130 +391,161 @@ class VQVAE(nn.Module):
             "x_recon": x_recon,
         }
 
-# TODO: reading vlsv file
-import sys
-cids=[1,2,3,4,5,6,7,8]
-filename=sys.argv[1]
-# input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
-# input_array=input_array.squeeze();
-# print(input_array.shape)
+if __name__=="__main__":
+
+  local_rank = int(os.environ['LOCAL_RANK'])
+  rank = int(os.environ["RANK"])
+
+  print("local_rank: ", local_rank)
+  # Set CPU bindings based on LOCAL_RANK which is also used to set GPU device
+    # A mapping from GCD to the closest CPU cores in a LUMI-G node
+    # Note that CPU cores 0, 8, 16, 24, 32, 40, 48, 56 are reserved for the
+    # system and not available for the user
+    # See https://docs.lumi-supercomputer.eu/hardware/lumig/
+  LUMI_GPU_CPU_map = {
+    0: [49, 50, 51, 52, 53, 54, 55],
+    1: [57, 58, 59, 60, 61, 62, 63],
+    2: [17, 18, 19, 20, 21, 22, 23],
+    3: [25, 26, 27, 28, 29, 30, 31],
+    4: [1, 2, 3, 4, 5, 6, 7],
+    5: [9, 10, 11, 12, 13, 14, 15],
+    6: [33, 34, 35, 36, 37, 38, 39],
+    7: [41, 42, 43, 44, 45, 46, 47], }
+
+  cpu_list = LUMI_GPU_CPU_map[local_rank]
+  print(f"Rank {rank} (local {local_rank}) binding to cpus: {cpu_list}")
+  psutil.Process().cpu_affinity(cpu_list)
+
+  dist.init_process_group(backend="nccl")
+
+  cids=[1,2,3,4,5,6,7,8]
+  filename=sys.argv[1]
+
+  # input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
+  # input_array=input_array.squeeze();
+  # print(input_array.shape)
 
 
-#device = 'cuda'
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#device = 'cpu'
-print('Using device:', device)
+  #device = 'cuda'
+  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu', local_rank)
 
-use_tb = True # Use Tensorboard (optional)
+  #device = 'cpu'
+  print('Using device:', device)
 
-# Initialize model
-use_ema = True # Use exponential moving average
-model_args = {
-    "in_channels":1,
-    "num_hiddens": 128,
-    "num_downsampling_layers": 2,
-    "num_residual_layers": 2,
-    "num_residual_hiddens": 32,
-    "embedding_dim": 64,
-    "num_embeddings": 512,
-    "use_ema": use_ema,
-    "decay": 0.99,
-    "epsilon": 1e-5,
-}
+  use_tb = True # Use Tensorboard (optional)
 
-model_single = VQVAE(**model_args).to(device)
-print("defined model_single")
-model = DistributedDataParallel(model_single, device_ids=[local_rank])
-print("defined model")
+  # Initialize model
+  use_ema = True # Use exponential moving average
+  model_args = {
+      "in_channels":1,
+      "num_hiddens": 128,
+      "num_downsampling_layers": 2,
+      "num_residual_layers": 2,
+      "num_residual_hiddens": 32,
+      "embedding_dim": 64,
+      "num_embeddings": 512,
+      "use_ema": use_ema,
+      "decay": 0.99,
+      "epsilon": 1e-5,
+  }
 
-class VDFDataset():
-    def __init__(self, cids,filename):
-        self.cids=cids
-        self.filename=filename
+  print("Defining a model")
+  #model_single = VQVAE(**model_args)#.to(device)
+  #print("defined model_single")
+  model = DistributedDataParallel(VQVAE(**model_args).to(device),
+                                  device_ids=[local_rank], 
+                                  output_device=local_rank,
+                                  )
+  print("defined model")
 
-    def __len__(self):
-        return len(self.cids)
+  class VDFDataset():
+      def __init__(self, cids,filename):
+          self.cids=cids
+          self.filename=filename
 
-    def __getitem__(self, idx):
-        vdf=extract_vdf(self.filename, self.cids[idx],box=25)
-        vdf_norm = (vdf - vdf.min())/(vdf.max() - vdf.min())
-        return torch.tensor(vdf_norm).unsqueeze(0)#.to(device)
-        
+      def __len__(self):
+          return len(self.cids)
 
-# Initialize dataset
-batch_size = 2
-workers = 0
+      def __getitem__(self, idx):
+          vdf=extract_vdf(self.filename, self.cids[idx],box=25)
+          vdf_norm = (vdf - vdf.min())/(vdf.max() - vdf.min())
+          return torch.tensor(vdf_norm).unsqueeze(0)#.to(device)
+          
 
-# input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
-# input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0)#.unsqueeze(0)#.to(device)  # Add batch and channel dimensions, move to device
-# print(input_tensor.shape)
-# train_dataset = input_tensor
+  # Initialize dataset
+  batch_size = 2
+  workers = 0
 
-VDF_Data=VDFDataset(cids,filename)
-print("defined dataset")
+  # input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
+  # input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0)#.unsqueeze(0)#.to(device)  # Add batch and channel dimensions, move to device
+  # print(input_tensor.shape)
+  # train_dataset = input_tensor
 
-vdf_sampler=DistributedSampler(VDF_Data)
-print("defined sampler")
+  VDF_Data=VDFDataset(cids,filename)
+  print("defined dataset")
 
-train_loader = DataLoader(
-    dataset=VDF_Data,
-    sampler=vdf_sampler,
-    batch_size=batch_size,
-    shuffle=True,
-    num_workers=workers,
-    pin_memory=True,
-)
-print("defined dataloader")
+  vdf_sampler=DistributedSampler(VDF_Data)
+  print("defined sampler")
 
-# Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
-beta = 0.25
+  train_loader = DataLoader(
+      dataset=VDF_Data,
+      sampler=vdf_sampler,
+      batch_size=batch_size,
+      shuffle=True,
+      num_workers=workers,
+      pin_memory=True,
+  )
+  print("defined dataloader")
 
-# Initialize optimizer
-train_params = [params for params in model.parameters()]
-lr = 3e-4
-optimizer = optim.Adam(train_params, lr=lr)
-criterion = nn.MSELoss()
+  # Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
+  beta = 0.25
 
-# Train model
-epochs = 3
-eval_every = 1
-best_train_loss = float("inf")
-model.train()
-print("starting training..")
-# Training
-for epoch in tqdm(range(epochs)):
-    total_train_loss = 0
-    total_recon_error = 0
-    n_train = 0
-    for (batch_idx, train_tensors) in enumerate(train_loader):
-        optimizer.zero_grad()
-        imgs = train_tensors[0].unsqueeze(0).to(device)
-        out = model(imgs)
-        recon_error = criterion(out["x_recon"], imgs) #/ train_data_variance
-        total_recon_error += recon_error.item()
-        loss = recon_error + beta * out["commitment_loss"]
-        if not use_ema:
-            loss += out["dictionary_loss"]
+  # Initialize optimizer
+  train_params = [params for params in model.parameters()]
+  lr = 3e-4
+  optimizer = optim.Adam(train_params, lr=lr)
+  criterion = nn.MSELoss()
 
-        total_train_loss += loss.item()
-        loss.backward()
-        optimizer.step()
-        n_train += 1
+  # Train model
+  epochs = 3
+  eval_every = 1
+  best_train_loss = float("inf")
+  model.train()
+  print("starting training..")
+  # Training
+  for epoch in tqdm(range(epochs)):
+      total_train_loss = 0
+      total_recon_error = 0
+      n_train = 0
+      for (batch_idx, train_tensors) in enumerate(train_loader):
+          optimizer.zero_grad()
+          imgs = train_tensors[0].unsqueeze(0).to(device)
+          out = model(imgs)
+          recon_error = criterion(out["x_recon"], imgs) #/ train_data_variance
+          total_recon_error += recon_error.item()
+          loss = recon_error + beta * out["commitment_loss"]
+          if not use_ema:
+              loss += out["dictionary_loss"]
 
-        if ((batch_idx + 1) % eval_every) == 0:
-            print(f"epoch: {epoch}\nbatch_idx: {batch_idx + 1}", flush=True)
-            total_train_loss /= n_train
-            if total_train_loss < best_train_loss:
-                best_train_loss = total_train_loss
+          total_train_loss += loss.item()
+          loss.backward()
+          optimizer.step()
+          n_train += 1
 
-            print(f"best_train_loss: {best_train_loss}")
-            print(f"recon_error: {total_recon_error / n_train}\n")
-            total_train_loss = 0
-            total_recon_error = 0
-            n_train = 0
+          if ((batch_idx + 1) % eval_every) == 0:
+              print(f"epoch: {epoch}\nbatch_idx: {batch_idx + 1}", flush=True)
+              total_train_loss /= n_train
+              if total_train_loss < best_train_loss:
+                  best_train_loss = total_train_loss
+
+              print(f"best_train_loss: {best_train_loss}")
+              print(f"recon_error: {total_recon_error / n_train}\n")
+              total_train_loss = 0
+              total_recon_error = 0
+              n_train = 0
 
 
 
-# with torch.no_grad():
-#     encoded = model.encoder(input_tensor)
+  # with torch.no_grad():
+  #     encoded = model.encoder(input_tensor)
 
