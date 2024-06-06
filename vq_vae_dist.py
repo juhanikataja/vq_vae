@@ -1,6 +1,7 @@
 #import sys
 #sys.path.append('/scratch/project_462000599/kostis/libs/analysator')
 
+import os
 import torch
 import torchvision
 from torch import nn, optim
@@ -13,17 +14,17 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 
+
 import numpy as np
 from tqdm import tqdm
 import pytools as pt
-
 torch.cuda.empty_cache()
 
+# init distributed
 dist.init_process_group(backend='nccl')
 
 local_rank = int(os.environ['LOCAL_RANK'])
 torch.cuda.set_device(local_rank)
-
 
 #Reads in a VDF from cid CellID in a 3D  32 bit numpy array
 def extract_vdf(file, cid, box=-1):
@@ -72,7 +73,7 @@ def extract_vdfs(file , cids,box):
     vdfs=[]
     for cid in cids:
         vdfs.append(extract_vdf(file, cid,box))
-    return np.asarray(vdfs);
+    return np.stack(vdfs);
 
 class ResidualStack(nn.Module):
     def __init__(self, num_hiddens, num_residual_layers, num_residual_hiddens):
@@ -389,14 +390,15 @@ class VQVAE(nn.Module):
 
 # TODO: reading vlsv file
 import sys
-#cids=[1,2,3,4,5]
-cids=range(0,20)
-#filename="restart.0000100.2024-05-31_12-50-15.vlsv"
+cids=[1,2,3,4,5,6,7,8]
 filename=sys.argv[1]
-input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
-input_array=input_array.squeeze();
+# input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
+# input_array=input_array.squeeze();
+# print(input_array.shape)
 
-device = 'cuda' #torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+#device = 'cuda'
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #device = 'cpu'
 print('Using device:', device)
 
@@ -405,7 +407,7 @@ use_tb = True # Use Tensorboard (optional)
 # Initialize model
 use_ema = True # Use exponential moving average
 model_args = {
-    "in_channels": 1,
+    "in_channels":1,
     "num_hiddens": 128,
     "num_downsampling_layers": 2,
     "num_residual_layers": 2,
@@ -418,26 +420,48 @@ model_args = {
 }
 
 model_single = VQVAE(**model_args).to(device)
+print("defined model_single")
 model = DistributedDataParallel(model_single, device_ids=[local_rank])
+print("defined model")
+
+class VDFDataset():
+    def __init__(self, cids,filename):
+        self.cids=cids
+        self.filename=filename
+
+    def __len__(self):
+        return len(self.cids)
+
+    def __getitem__(self, idx):
+        vdf=extract_vdf(self.filename, self.cids[idx],box=25)
+        vdf_norm = (vdf - vdf.min())/(vdf.max() - vdf.min())
+        return torch.tensor(vdf_norm).unsqueeze(0)#.to(device)
+        
 
 # Initialize dataset
-batch_size = 1
+batch_size = 2
 workers = 0
 
-input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
-input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0).unsqueeze(0)#.to(device)  # Add batch and channel dimensions, move to device
+# input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
+# input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0)#.unsqueeze(0)#.to(device)  # Add batch and channel dimensions, move to device
+# print(input_tensor.shape)
+# train_dataset = input_tensor
 
-train_dataset = input_tensor
-train_sampler = DistributedSampler(train_dataset)
+VDF_Data=VDFDataset(cids,filename)
+print("defined dataset")
+
+vdf_sampler=DistributedSampler(VDF_Data)
+print("defined sampler")
 
 train_loader = DataLoader(
-    dataset=train_dataset,
-    sampler=train_sampler,
+    dataset=VDF_Data,
+    sampler=vdf_sampler,
     batch_size=batch_size,
     shuffle=True,
     num_workers=workers,
     pin_memory=True,
 )
+print("defined dataloader")
 
 # Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
 beta = 0.25
@@ -453,7 +477,7 @@ epochs = 3
 eval_every = 1
 best_train_loss = float("inf")
 model.train()
-
+print("starting training..")
 # Training
 for epoch in tqdm(range(epochs)):
     total_train_loss = 0
@@ -485,4 +509,9 @@ for epoch in tqdm(range(epochs)):
             total_train_loss = 0
             total_recon_error = 0
             n_train = 0
+
+
+
+# with torch.no_grad():
+#     encoded = model.encoder(input_tensor)
 
