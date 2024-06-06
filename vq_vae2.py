@@ -376,11 +376,11 @@ class VQVAE(nn.Module):
 
 # TODO: reading vlsv file
 import sys
-cids=[1,2]
+cids=[1,2,3,4,5,6,7,8]
 filename=sys.argv[1]
-input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
-input_array=input_array.squeeze();
-print(input_array.shape)
+# input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
+# input_array=input_array.squeeze();
+# print(input_array.shape)
 
 
 device = 'cuda'#torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -392,7 +392,7 @@ use_tb = True # Use Tensorboard (optional)
 # Initialize model
 use_ema = True # Use exponential moving average
 model_args = {
-    "in_channels":len(cids),
+    "in_channels":1,
     "num_hiddens": 128,
     "num_downsampling_layers": 2,
     "num_residual_layers": 2,
@@ -405,20 +405,35 @@ model_args = {
 }
 model = VQVAE(**model_args).to(device)
 
+class VDFDataset():
+    def __init__(self, cids,filename):
+        self.cids=cids
+        self.filename=filename
+
+    def __len__(self):
+        return len(self.cids)
+
+    def __getitem__(self, idx):
+        vdf=extract_vdf(self.filename, self.cids[idx],box=25)
+        vdf_norm = (vdf - vdf.min())/(vdf.max() - vdf.min())
+        return torch.tensor(vdf_norm).unsqueeze(0).to(device)
+        
+
 # Initialize dataset
-batch_size = 1
+batch_size = 2
 workers = 0
 
-input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
-input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0)#.unsqueeze(0)#.to(device)  # Add batch and channel dimensions, move to device
-print(input_tensor.shape)
-train_dataset = input_tensor
+# input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
+# input_tensor = torch.tensor(input_norm, dtype=torch.float32).unsqueeze(0)#.unsqueeze(0)#.to(device)  # Add batch and channel dimensions, move to device
+# print(input_tensor.shape)
+# train_dataset = input_tensor
+VDF_Data=VDFDataset(cids,filename)
 train_loader = DataLoader(
-    dataset=train_dataset,
+    dataset=VDF_Data,
     batch_size=batch_size,
     shuffle=True,
     num_workers=workers,
-    pin_memory=True,
+    pin_memory=False,
 )
 
 # Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
