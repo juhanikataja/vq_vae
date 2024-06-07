@@ -420,7 +420,7 @@ if __name__=="__main__":
 
   dist.init_process_group(backend="nccl")
 
-  cids=[1,2,3,4,5,6,7,8]
+  cids=range(1,1000)
   filename=sys.argv[1]
 
   # input_array=extract_vdfs(filename,cids,25) # 25-> half the mesh dimension
