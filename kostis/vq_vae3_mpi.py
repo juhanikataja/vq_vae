@@ -12,44 +12,16 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 from torchvision import datasets, transforms
 from torch.multiprocessing import Process
-from mpi4py import MPI
 
-# comm = MPI.COMM_WORLD
-# rank = comm.Get_rank()
-# size = comm.Get_size()
+
 dist.init_process_group(backend='nccl')
 rank = int(os.environ['LOCAL_RANK'])
-torch.cuda.set_device(local_rank)
-print(f"Hello from rank {rank}")
-sys.stdout.flush()
-#wrap ranks around GPU
-local_rank = rank % torch.cuda.device_count()
-torch.cuda.set_device(local_rank)
-print(f"Task {rank} will torture device {rank % torch.cuda.device_count()} ")
-assert torch.distributed.is_available(),"Not supported"
-assert torch.distributed.is_nccl_available(),"Not supported"
-#assert size == torch.cuda.device_count(),"NCCL is in so we need this??" ;
-sys.stdout.flush()
-
-# comm.barrier()
-# os.environ['MASTER_ADDR'] = 'localhost'
-# os.environ['MASTER_PORT'] = '29400'
-# os.environ['MAIN_PROCESS_PORT'] = '9999'
-# os.environ['WORLD_SIZE'] = str(size)
-# os.environ['RANK'] = str(rank)
-# comm.barrier()
-
-print("Initializing Group")
-print(f"INFO: {size} {rank}")
-sys.stdout.flush()
-# dist.init_process_group(backend='nccl', world_size=size, rank=rank)
-print("Group Initialzied");sys.stdout.flush()
+torch.cuda.set_device(rank)
 
 filename=sys.argv[1]
 device ='cuda'
 
 # Initialize model
-print("Init model");sys.stdout.flush()
 use_ema = True # Use exponential moving average
 model_args = {
     "in_channels":1,
@@ -64,17 +36,13 @@ model_args = {
     "epsilon": 1e-5,
 }
 model = VQVAE(**model_args).to(device)
-model = DDP(model, device_ids=[local_rank])
-print("Init model done");sys.stdout.flush()
+model = DDP(model, device_ids=[rank])
 
-
-print("Initializing Data loader")
-sys.stdout.flush()
 batch_size = 5
 workers = 0
 cids = np.arange(1, 20)
 VDF_Data = Vlasiator_DataSet(cids, filename, device)
-train_sampler = DistributedSampler(VDF_Data, num_replicas=size, rank=rank)
+train_sampler = DistributedSampler(VDF_Data, rank=rank,device_ids=[rank])
 train_loader = DataLoader(
     dataset=VDF_Data,
     batch_size=batch_size,
@@ -82,8 +50,6 @@ train_loader = DataLoader(
     num_workers=workers,
     pin_memory=False
 )
-print("Loader initialized")
-sys.stdout.flush()
 
 # Multiplier for commitment loss. See Equation (3) in "Neural Discrete Representation Learning"
 beta = 0.25
@@ -93,7 +59,6 @@ train_params = [params for params in model.parameters()]
 lr = 3e-4
 optimizer = optim.Adam(train_params, lr=lr)
 criterion = nn.MSELoss()
-
 # Train model
 epochs = 3
 eval_every = 1
@@ -109,7 +74,7 @@ for epoch in range(epochs):
     n_train = 0
     for batch_idx, train_tensors in enumerate(train_loader):
         optimizer.zero_grad()
-        imgs = train_tensors[0].unsqueeze(0).to(local_rank)
+        imgs = train_tensors[0].unsqueeze(0).to(rank)
         out = model(imgs)
         recon_error = criterion(out["x_recon"], imgs)
         total_recon_error += recon_error.item()
@@ -134,8 +99,7 @@ for epoch in range(epochs):
             total_recon_error = 0
             n_train = 0
 
-        sys.stdout.flush()
             
 comm.barrier()
-if local_rank==0:
+if rank==0:
     torch.save(model.state_dict(), "model_state.ptch")
