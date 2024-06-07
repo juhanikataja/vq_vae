@@ -42,7 +42,8 @@ batch_size = 5
 workers = 0
 cids = np.arange(1, 20)
 VDF_Data = Vlasiator_DataSet(cids, filename, device)
-train_sampler = DistributedSampler(VDF_Data, rank=rank,device_ids=[rank])
+# train_sampler = DistributedSampler(VDF_Data, rank=rank,device_ids=[rank])
+train_sampler = DistributedSampler(VDF_Data, rank=rank)
 train_loader = DataLoader(
     dataset=VDF_Data,
     batch_size=batch_size,
@@ -100,6 +101,5 @@ for epoch in range(epochs):
             n_train = 0
 
             
-comm.barrier()
 if rank==0:
     torch.save(model.state_dict(), "model_state.ptch")
