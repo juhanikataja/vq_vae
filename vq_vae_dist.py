@@ -1,5 +1,4 @@
 #import sys
-#sys.path.append('/scratch/project_462000599/kostis/libs/analysator')
 
 import sys
 import os
@@ -22,7 +21,10 @@ from torch.utils.data.distributed import DistributedSampler
 
 import numpy as np
 from tqdm import tqdm
+
+sys.path.append('analysator')
 import pytools as pt
+
 torch.cuda.empty_cache()
 
 # init distributed
@@ -491,9 +493,9 @@ if __name__=="__main__":
       dataset=VDF_Data,
       sampler=vdf_sampler,
       batch_size=batch_size,
-      shuffle=True,
+      shuffle=False,
       num_workers=workers,
-      pin_memory=True,
+      pin_memory=False,
   )
   print("defined dataloader")
 
