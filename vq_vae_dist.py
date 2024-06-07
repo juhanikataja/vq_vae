@@ -100,7 +100,7 @@ if __name__=="__main__":
           
 
   # Initialize dataset
-  batch_size = 64
+  batch_size = 16
   workers = 0
 
   # input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
