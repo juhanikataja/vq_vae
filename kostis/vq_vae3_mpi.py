@@ -115,3 +115,8 @@ for epoch in range(epochs):
             total_train_loss = 0
             total_recon_error = 0
             n_train = 0
+
+            
+comm.barrier()
+if rank==0:
+    torch.save(model.state_dict(), "model_state.ptch")
