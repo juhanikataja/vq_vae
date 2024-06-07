@@ -85,7 +85,7 @@ if __name__=="__main__":
                                   # )
   print("defined model")
 
-  class VDFDataset():
+  class VDFDataset(): # deprecated
       def __init__(self, cids,filename):
           self.cids=cids
           self.filename=filename
@@ -100,7 +100,7 @@ if __name__=="__main__":
           
 
   # Initialize dataset
-  batch_size = 2
+  batch_size = 64
   workers = 0
 
   # input_norm = (input_array - input_array.min())/(input_array.max() - input_array.min()) # MinMax normalization
