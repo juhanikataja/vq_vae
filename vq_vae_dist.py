@@ -142,7 +142,7 @@ if __name__=="__main__":
   print("starting training..")
   # Training
   for epoch in tqdm(range(epochs)):
-      train_sampler.set_epoch(epoch)
+      vdf_sampler.set_epoch(epoch)
       total_train_loss = 0
       total_recon_error = 0
       n_train = 0
