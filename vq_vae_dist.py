@@ -42,8 +42,10 @@ if __name__=="__main__":
   local_rank = int(os.environ['LOCAL_RANK'])
   rank = int(os.environ["RANK"])
   world_size = int(os.environ["WORLD_SIZE"])
+  nodeid = int(os.environ["SLURM_NODEID"])
+  print(f"rank/ranks: {rank}/{world_size}. Local rank: {local_rank}. Node-ID: {nodeid}")
 
-  dist.init_process_group(backend="nccl")
+  dist.init_process_group(backend="nccl", world_size=world_size, rank=rank)
 
   cids=range(1,1000)
   filename=sys.argv[1]
