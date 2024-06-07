@@ -414,7 +414,7 @@ if __name__=="__main__":
 
   cpu_list = LUMI_GPU_CPU_map[local_rank]
   print(f"Rank {rank} (local {local_rank}) binding to cpus: {cpu_list}")
-  psutil.Process().cpu_affinity(cpu_list)
+  # psutil.Process().cpu_affinity(cpu_list)
 
   dist.init_process_group(backend="nccl")
 
@@ -453,9 +453,9 @@ if __name__=="__main__":
   #model_single = VQVAE(**model_args)#.to(device)
   #print("defined model_single")
   model = DistributedDataParallel(VQVAE(**model_args).to(device),
-                                  device_ids=[local_rank], 
-                                  output_device=local_rank,
-                                  )
+                                  device_ids=[device])#, 
+                                  # output_device=device,
+                                  # )
   print("defined model")
 
   class VDFDataset():
@@ -469,7 +469,7 @@ if __name__=="__main__":
       def __getitem__(self, idx):
           vdf=extract_vdf(self.filename, self.cids[idx],box=25)
           vdf_norm = (vdf - vdf.min())/(vdf.max() - vdf.min())
-          return torch.tensor(vdf_norm).unsqueeze(0)#.to(device)
+          return torch.tensor(vdf_norm).unsqueeze(0).to(device)
           
 
   # Initialize dataset
